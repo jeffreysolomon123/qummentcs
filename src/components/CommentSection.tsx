@@ -67,16 +67,22 @@ const CommentSection = ({ projectSlug, threadSlug }: Props) => {
         setNewCommentName("");
         setNewCommentContent("");
 
-        await fetch("https://qumment.vercel.app/api/comment", {
+        const res = await fetch("https://ewjrpafiovbvmluylhlf.supabase.co/functions/v1/post-comment", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 project_slug: projectSlug,
                 thread_slug: threadSlug,
-                author_name: newCommentName,
+                author_name : newCommentName,
                 content: newCommentContent,
             }),
         });
+
+        if (res.status === 429) {
+            alert("You're commenting too fast. Please wait a moment.");
+            return;
+        }
+
     };
 
     const handleSubmitReply = async (parentId: string) => {
@@ -109,7 +115,8 @@ const CommentSection = ({ projectSlug, threadSlug }: Props) => {
         }));
 
 
-        await fetch("https://qumment.vercel.app/api/comment", {
+
+        const res = await fetch("https://ewjrpafiovbvmluylhlf.supabase.co/functions/v1/post-comment", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -120,6 +127,12 @@ const CommentSection = ({ projectSlug, threadSlug }: Props) => {
                 parent_id: parentId,
             }),
         });
+
+        if (res.status === 429) {
+            alert("You're commenting too fast. Please wait a moment.");
+            return;
+        }
+
     };
 
     const renderComments = (parentId = "root") => {
@@ -227,6 +240,10 @@ const CommentSection = ({ projectSlug, threadSlug }: Props) => {
             <hr className="my-6" />
 
             <h2 className="text-lg font-semibold">Comments</h2>
+            <h1>
+                {Object.values(groupedComments).reduce((total, commentsArray) => total + commentsArray.length, 0)}
+            </h1>
+
             <div className="flex justify-end mb-4">
                 <label className="mr-2 text-sm font-medium text-gray-600">Sort by:</label>
                 <select
