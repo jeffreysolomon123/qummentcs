@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import {getTimeAgo} from "@/lib/date.ts";
 
 interface Comment {
     id: string;
@@ -30,7 +31,7 @@ const CommentSection = ({ projectSlug, threadSlug }: Props) => {
     useEffect(() => {
         const fetchComments = async () => {
             const res = await fetch(
-                `https://qumment.vercel.app/api/comment?project_slug=${projectSlug}&thread_slug=${threadSlug}`
+                `https://ewjrpafiovbvmluylhlf.supabase.co/functions/v1/get-comments?project_slug=${projectSlug}&thread_slug=${threadSlug}`
         );
             const result = await res.json();
             const grouped = result.comments.reduce((acc: Record<string, Comment[]>, comment: Comment) => {
@@ -49,9 +50,8 @@ const CommentSection = ({ projectSlug, threadSlug }: Props) => {
     const handleSubmitComment = async () => {
         if (!newCommentName.trim() || !newCommentContent.trim()) return;
 
-        const tempId = Date.now().toString();
-        const newComment: Comment = {
-            id: tempId,
+        const tempComment = {
+            id: Date.now().toString(),
             parent_id: null,
             author_name: newCommentName,
             content: newCommentContent,
@@ -60,37 +60,45 @@ const CommentSection = ({ projectSlug, threadSlug }: Props) => {
             created_at: new Date().toISOString(),
         };
 
-        setGroupedComments(prev => ({
-            ...prev,
-            root: [...(prev["root"] || []), newComment],
-        }));
-        setNewCommentName("");
-        setNewCommentContent("");
+        try {
+            const res = await fetch("https://ewjrpafiovbvmluylhlf.supabase.co/functions/v1/post-comment", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    project_slug: projectSlug,
+                    thread_slug: threadSlug,
+                    author_name: newCommentName,
+                    content: newCommentContent,
+                }),
+            });
 
-        const res = await fetch("https://ewjrpafiovbvmluylhlf.supabase.co/functions/v1/post-comment", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                project_slug: projectSlug,
-                thread_slug: threadSlug,
-                author_name : newCommentName,
-                content: newCommentContent,
-            }),
-        });
+            const result = await res.json();
 
-        if (res.status === 429) {
-            alert("You're commenting too fast. Please wait a moment.");
-            return;
+            if (!res.ok) {
+                alert(result.error || "Failed to post comment");
+                return;
+            }
+
+            // ✅ Only update UI on success
+            setGroupedComments(prev => ({
+                ...prev,
+                root: [...(prev["root"] || []), tempComment],
+            }));
+
+            setNewCommentName("");
+            setNewCommentContent("");
+
+        } catch (error) {
+            console.error(error);
+            alert("Something went wrong while posting comment");
         }
-
     };
 
     const handleSubmitReply = async (parentId: string) => {
         if (!replyName.trim() || !replyContent.trim()) return;
 
-        const tempId = Date.now().toString();
-        const newReply: Comment = {
-            id: tempId,
+        const tempReply = {
+            id: Date.now().toString(),
             parent_id: parentId,
             author_name: replyName,
             content: replyContent,
@@ -99,40 +107,40 @@ const CommentSection = ({ projectSlug, threadSlug }: Props) => {
             created_at: new Date().toISOString(),
         };
 
-        setGroupedComments(prev => ({
-            ...prev,
-            [parentId]: [...(prev[parentId] || []), newReply],
-        }));
+        try {
+            const res = await fetch("https://ewjrpafiovbvmluylhlf.supabase.co/functions/v1/post-comment", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    project_slug: projectSlug,
+                    thread_slug: threadSlug,
+                    parent_id: parentId,
+                    author_name: replyName,
+                    content: replyContent,
+                }),
+            });
 
-        setReplyName("");
-        setReplyContent("");
-        setActiveReplyBoxId(null);
+            const result = await res.json();
 
-// 👇 Automatically expand replies for the parent
-        setActiveReplies(prev => ({
-            ...prev,
-            [parentId]: true,
-        }));
+            if (!res.ok) {
+                alert(result.error || "Failed to post reply");
+                return;
+            }
 
+            // ✅ Only update UI if successful
+            setGroupedComments(prev => ({
+                ...prev,
+                [parentId]: [...(prev[parentId] || []), tempReply],
+            }));
 
+            setReplyName("");
+            setReplyContent("");
+            setActiveReplyBoxId(null);
 
-        const res = await fetch("https://ewjrpafiovbvmluylhlf.supabase.co/functions/v1/post-comment", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                project_slug: projectSlug,
-                thread_slug: threadSlug,
-                author_name: newReply.author_name,
-                content: newReply.content,
-                parent_id: parentId,
-            }),
-        });
-
-        if (res.status === 429) {
-            alert("You're commenting too fast. Please wait a moment.");
-            return;
+        } catch (error) {
+            console.error(error);
+            alert("Something went wrong while posting reply");
         }
-
     };
 
     const renderComments = (parentId = "root") => {
@@ -205,18 +213,7 @@ const CommentSection = ({ projectSlug, threadSlug }: Props) => {
     };
 
 
-    const getTimeAgo = (dateString: string) => {
-        const now = new Date();
-        const date = new Date(dateString);
-        const diff = (now.getTime() - date.getTime()) / 1000;
 
-        if (diff < 60) return "just now";
-        if (diff < 3600) return `${Math.floor(diff / 60)} minute(s) ago`;
-        if (diff < 86400) return `${Math.floor(diff / 3600)} hour(s) ago`;
-        if (diff < 2592000) return `${Math.floor(diff / 86400)} day(s) ago`;
-        if (diff < 31104000) return `${Math.floor(diff / 2592000)} month(s) ago`;
-        return `${Math.floor(diff / 31104000)} year(s) ago`;
-    };
 
     return (
         <div className="p-4">
